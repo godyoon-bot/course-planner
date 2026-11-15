@@ -93,6 +93,7 @@ button,input,select{font:inherit;color:inherit}
 .pin .tail{width:0;height:0;border:7px solid transparent;border-top-color:#fff;margin-top:-1px}
 .pin.end .bub{background:var(--ink)}.pin.end .bub b{color:var(--ink)}
 .dayDot{background:rgba(29,29,27,.75);color:#fff;font-size:11px;padding:2px 7px;border-radius:999px;white-space:nowrap;pointer-events:none;font-family:"Noto Sans KR",system-ui,sans-serif}
+.nav{display:block;margin-top:6px;border:0;background:#fee500;color:#191600;font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hill{color:var(--muted);font-weight:400}
 .prof{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:-4px 0 12px}
 .prof svg{width:100%;height:70px;display:block}
@@ -156,7 +157,7 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
         <button class="btn share" id="shareLink">🔗 보기 전용 링크 보내기</button>
         <div class="linkbox" id="linkbox"><textarea id="linkText" readonly></textarea></div>
       </div>
-      <div class="hint">· 장소·주소 검색과 지도: 카카오맵 · 도보/자전거 길찾기: OSRM(OpenStreetMap) · 고도: Copernicus DEM(© ESA), Open-Meteo<br>· 위치가 틀리면 후보 목록에서 고르거나 🎯를 누르고 지도를 탭하세요.</div>
+      <div class="hint">· 장소·주소 검색과 지도: 카카오맵 · 도보/자전거 길찾기: OSRM(OpenStreetMap) · 고도: Copernicus DEM(© ESA), Open-Meteo<br>· 위치가 틀리면 후보 목록에서 고르거나 🎯를 누르고 지도를 탭하세요.<br>· 🧭 길안내는 카카오맵 앱에서 <b>내 현재 위치</b>부터 안내해요.</div>
     </div>
   </div>
 </div>
@@ -397,8 +398,9 @@ function renderOut(){
   let h=`<div class="res">${M.ic} 도착 예상 <b>${hm(last.arr)}</b>${last.arr>=1440?' (다음날)':''}<br>총 ${fkm(totD)} · 이동 ${dur(totMove)} · 머묾 ${dur(totStay)} · 전체 ${dur(last.arr-rows[0].dep)}${hillTxt}${cmp}${approx?'<br><span style="font-size:12px;color:#8a6d1f">일부 구간은 길찾기에 실패해 직선 기준으로 어림했어요 (점선)</span>':''}</div><ul class="tl">`;
   rows.forEach((r,i)=>{const p=r.p,isS=r.kind==='start',isE=r.kind==='end',next=rows[i+1];
     const nm=isS?'출발 · '+esc(p.name||'출발지'):isE?'도착 · '+esc(p.name||'도착지'):`${P(p.purpose).e} ${esc(p.name||P(p.purpose).l)}`;
-    h+=`<li data-k="${p.__k}"><div class="t">${hm(isS?r.dep:r.arr)}${r.kind==='wp'?`<small>~${hm(r.dep)}</small>`:''}</div><div class="rail"><i class="${isE?'end':''}"></i>${next?'<span></span>':''}</div><div class="body"><div class="nm">${nm}</div>${r.kind==='wp'?`<div class="meta">${P(p.purpose).l} · ${dur(p.stay||0)} 머묾 → ${hm(r.dep)} 출발</div>`:''}${p.addr?`<div class="meta">${esc(p.addr)}</div>`:''}${next?`<div class="leg">${M.ic} ${fkm(next.leg.d)} · 약 ${dur(Math.max(1,next.leg.min))}${next.leg.e?` <span class="hill">⛰ ↑${Math.round(next.leg.up||0)}m ↓${Math.round(next.leg.down||0)}m${T.hill!==false&&Math.round(next.leg.min-next.leg.flat)?` (${next.leg.min>next.leg.flat?'+':'−'}${Math.round(Math.abs(next.leg.min-next.leg.flat))}분)`:''}</span>`:''}</div>`:''}</div></li>`;});
+    h+=`<li data-k="${p.__k}"><div class="t">${hm(isS?r.dep:r.arr)}${r.kind==='wp'?`<small>~${hm(r.dep)}</small>`:''}</div><div class="rail"><i class="${isE?'end':''}"></i>${next?'<span></span>':''}</div><div class="body"><div class="nm">${nm}</div>${r.kind==='wp'?`<div class="meta">${P(p.purpose).l} · ${dur(p.stay||0)} 머묾 → ${hm(r.dep)} 출발</div>`:''}${p.addr?`<div class="meta">${esc(p.addr)}</div>`:''}${next?`<div class="leg">${M.ic} ${fkm(next.leg.d)} · 약 ${dur(Math.max(1,next.leg.min))}${next.leg.e?` <span class="hill">⛰ ↑${Math.round(next.leg.up||0)}m ↓${Math.round(next.leg.down||0)}m${T.hill!==false&&Math.round(next.leg.min-next.leg.flat)?` (${next.leg.min>next.leg.flat?'+':'−'}${Math.round(Math.abs(next.leg.min-next.leg.flat))}분)`:''}</span>`:''}</div><button class="nav" data-to="${i+1}">🧭 ${esc(next.p.name||'다음 장소')}까지 카카오맵 길안내</button>`:''}</div></li>`;});
   box.innerHTML=h+'</ul>';
+  box.querySelectorAll('.nav').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=rows[+b.dataset.to];if(r)openKakaoNav(r.p);});
   const prof=profileSvg(rows);if(prof)box.querySelector('.res').insertAdjacentHTML('afterend',prof);
   box.querySelectorAll('li').forEach(li=>li.onclick=()=>{const p=pts().find(x=>x.__k===li.dataset.k);if(hasPos(p)){map.setCenter(LL(p.lat,p.lng));if(map.getLevel()>3)map.setLevel(3);if(innerWidth<860)$('mapbox').scrollIntoView({behavior:'smooth'});}});
 }
@@ -406,6 +408,15 @@ function drawRoute(rows){const M=MODES[S.mode];
   rows.forEach((r,i)=>{if(!r.leg)return;const a=rows[i-1].p,b=r.p;const path=(r.leg.g||[[a.lat,a.lng],[b.lat,b.lng]]).map(c=>LL(c[0],c[1]));
     [{w:10,c:'#000',o:.35},{w:7,c:'#ffffff',o:.95},{w:4.5,c:M.color,o:1,s:r.leg.g?'solid':'shortdash'}].forEach(st=>{
       const pl=new kakao.maps.Polyline({path,strokeWeight:st.w,strokeColor:st.c,strokeOpacity:st.o,strokeStyle:st.s||'solid'});pl.setMap(map);overlays.push(pl);});});}
+function openKakaoNav(p){
+  const name=p.name||P(p.purpose).l||'목적지';const by=S.mode==='bike'?'BICYCLE':'FOOT';const la=(+p.lat).toFixed(6),ln=(+p.lng).toFixed(6);
+  const web=`https://map.kakao.com/link/to/${encodeURIComponent(name.replace(/,/g,' '))},${la},${ln}`;
+  if(!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){window.open(web,'_blank');return;}
+  // no sp → 카카오맵이 내 현재 위치에서 출발
+  const app=`kakaomap://route?ep=${la},${ln}&by=${by}`;
+  let left=false;const onHide=()=>{if(document.hidden)left=true;};document.addEventListener('visibilitychange',onHide);
+  location.href=app;
+  setTimeout(()=>{document.removeEventListener('visibilitychange',onHide);if(!left&&!document.hidden){toast('카카오맵 앱이 없어서 웹으로 열어요');location.href=web;}},1600);}
 function profileSvg(rows){
   const pts3=[],marks=[];let off=0;
   rows.forEach((r,i)=>{if(!r.leg)return;if(!r.leg.e){off+=r.leg.d;return;}const e=r.leg.e,sc=r.leg.d/(e[e.length-1][0]||r.leg.d);e.forEach(q=>pts3.push([off+q[0]*sc,q[1]]));off+=r.leg.d;marks.push([off,i]);});
