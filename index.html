@@ -99,6 +99,13 @@ button,input,select{font:inherit;color:inherit}
 .prof svg{width:100%;height:70px;display:block}
 .prof .ph{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
 .hilltog{display:flex;align-items:center;gap:4px;margin-left:auto;cursor:pointer}
+.modal{position:fixed;inset:0;background:rgba(20,20,18,.45);display:none;align-items:center;justify-content:center;z-index:2500;padding:16px}
+.modal.open{display:flex}
+.modal .card{background:#fff;border-radius:16px;padding:16px;width:100%;max-width:420px;max-height:80vh;overflow:auto}
+.modal h3{margin:0 0 10px;font-size:16px}
+.trip{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;margin-bottom:6px}
+.trip.cur{border-color:var(--acc);background:var(--soft)}
+.trip .tt{flex:1;min-width:0}.trip .tt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.trip .tt small{color:var(--muted);font-size:12px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:10px;font-size:13px;z-index:3000;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 .empty{color:var(--muted);font-size:13px;padding:6px 0 0}
@@ -157,11 +164,18 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
         <button class="btn share" id="shareLink">🔗 보기 전용 링크 보내기</button>
         <div class="linkbox" id="linkbox"><textarea id="linkText" readonly></textarea></div>
       </div>
+      <div class="sharebox edit-only">
+        <h3>나중에 다시 고치려면</h3>
+        <p>코스는 이 폰 브라우저에 자동 저장돼요. 다른 폰이나 다른 브라우저(카톡 안 브라우저 등)에서 이어서 고치려면 <b>수정용 링크</b>를 카톡 ‘나와의 채팅’에 보내두세요. <b>친구에게는 보내지 마세요.</b></p>
+        <div class="btns"><button class="btn" id="editLink">✏️ 내 수정용 링크 저장</button><button class="btn" id="myTrips">📂 내 코스 목록</button></div>
+      </div>
       <div class="hint">· 장소·주소 검색과 지도: 카카오맵 · 도보/자전거 길찾기: OSRM(OpenStreetMap) · 고도: Copernicus DEM(© ESA), Open-Meteo<br>· 위치가 틀리면 후보 목록에서 고르거나 🎯를 누르고 지도를 탭하세요.<br>· 🧭 길안내는 카카오맵 앱에서 <b>내 현재 위치</b>부터 안내해요.</div>
     </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="modal" id="tripModal"><div class="card"><h3>📂 내 코스 목록</h3><div id="tripList"></div>
+  <div class="btns" style="margin-top:12px;justify-content:space-between"><button class="btn" id="newTrip">＋ 새 코스 만들기</button><button class="btn" id="closeTrips">닫기</button></div></div></div>
 
 <script>
 (function(){
@@ -197,7 +211,22 @@ function useDay(i){T.cur=Math.max(0,Math.min(i,T.days.length-1));S=T.days[T.cur]
 function keyed(){S.start.__k='start';S.wps.forEach(w=>w.__k='w'+w.id);S.end.__k='end';}
 const pts=()=>{keyed();return[S.start,...S.wps,S.end];};
 const legKey=(a,b)=>a.__k+'>'+b.__k+'@'+S.mode+'@'+a.lat+','+a.lng+'>'+b.lat+','+b.lng;
-function save(){if(VIEW)return;try{localStorage.setItem(KEY,JSON.stringify(T));}catch(e){}}
+function save(){if(VIEW)return;T.at=Date.now();try{localStorage.setItem(KEY,JSON.stringify(T));}catch(e){}}
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const stripTrip=t=>JSON.parse(JSON.stringify(t,(k,v)=>['legs','cands','__k','searching','e','eFail'].includes(k)?undefined:v));
+const hasContent=t=>t&&t.days&&t.days.some(D=>D.start.name||D.end.name||D.wps.some(w=>w.name));
+function listGet(){try{return JSON.parse(localStorage.getItem(KEY+':list')||'[]');}catch(e){return[];}}
+function listSet(l){try{localStorage.setItem(KEY+':list',JSON.stringify(l));}catch(e){toast('저장 공간이 부족해요');}}
+function archiveCurrent(){if(!hasContent(T))return;const l=listGet().filter(x=>x.id!==T.id);l.unshift({id:T.id,title:T.title||'이름 없는 코스',at:T.at||Date.now(),days:T.days.length,data:stripTrip(T)});listSet(l.slice(0,30));}
+function normTrip(t){t.id=t.id||newId();t.speed=Object.assign({walk:4,bike:13},t.speed||{});t.days=(t.days&&t.days.length)?t.days:[blankDay()];
+  t.days.forEach(D=>{D.legs=D.legs||{};D.wps=D.wps||[];D.start=D.start||{name:'',time:'09:00'};D.end=D.end||{name:'',time:''};D.wps.forEach(w=>{w.id=w.id||uid++;});});
+  uid=Math.max(uid,...t.days.flatMap(D=>D.wps.map(w=>w.id)),0)+1;t.cur=Math.min(t.cur||0,t.days.length-1);return t;}
+function loadTrip(t){T=normTrip(t);useDay(T.cur);save();switchDay(T.cur);setTimeout(fitAll,80);}
+function renderTripList(){const l=listGet();const el=$('tripList');const fmt=ms=>{const d=new Date(ms);return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;};
+  el.innerHTML=`<div class="trip cur"><div class="tt"><b>${esc(T.title||'이름 없는 코스')}</b><small>지금 보는 코스 · ${T.days.length}일</small></div></div>`+
+    (l.length?l.map((x,i)=>`<div class="trip"><div class="tt"><b>${esc(x.title)}</b><small>${x.days}일 · ${fmt(x.at)} 저장</small></div><button class="btn" data-open="${i}">열기</button><button class="icon" data-del="${i}" title="삭제">✕</button></div>`).join(''):'<div class="empty" style="padding:6px 2px">저장된 다른 코스가 없어요.</div>');
+  el.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{const l2=listGet();const it=l2[+b.dataset.open];archiveCurrent();listSet(listGet().filter(x=>x.id!==it.id));loadTrip(it.data);$('tripModal').classList.remove('open');toast(`“${it.title}”을 열었어요`);});
+  el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(!b.dataset.c){b.dataset.c=1;b.textContent='삭제?';setTimeout(()=>{delete b.dataset.c;b.textContent='✕';},2500);return;}const l2=listGet();l2.splice(+b.dataset.del,1);listSet(l2);renderTripList();});}
 
 /* ---------- share encode ---------- */
 async function pack(obj){const s=new TextEncoder().encode(JSON.stringify(obj));
@@ -453,8 +482,9 @@ function loadSdk(){return new Promise((res,rej)=>{if(!KAKAO_KEY){rej('nokey');re
   setTimeout(()=>rej('timeout'),12000);});}
 
 async function boot(){
-  let shared=null;const h=/^#v=(.+)$/.exec(location.hash);
+  let shared=null,editData=null;const h=/^#v=(.+)$/.exec(location.hash),he=/^#e=(.+)$/.exec(location.hash);
   if(h){try{shared=await unpack(h[1]);}catch(e){toast('링크가 손상됐어요');}}
+  if(he){try{editData=await unpack(he[1]);}catch(e){toast('수정용 링크가 손상됐어요');}history.replaceState(null,'',location.pathname+location.search);}
   try{await loadSdk();}catch(e){
     fatal(e==='nokey'?'카카오 키가 아직 안 들어갔어요.<br>파일 맨 위 <b>KAKAO_KEY</b>에 JavaScript 키를 넣어주세요.'
       :'<b>카카오 지도를 불러오지 못했어요.</b> ('+e+')<br><br>· 카카오 개발자 → 카카오맵: <b>사용 설정 ON</b>인지<br>· 플랫폼 키 → JavaScript 키의 SDK 도메인에 <b>'+esc(location.origin)+'</b> 이 있는지<br>· 키를 방금 만들었다면 몇 분 뒤 새로고침');
@@ -482,10 +512,13 @@ async function boot(){
     if(s&&s.days&&s.days.length)T=s;
     else if(s&&s.start)T={title:s.title||'',speed:s.speed||{walk:4,bike:13},days:[{mode:s.mode||'walk',start:s.start,end:s.end,wps:s.wps||[],legs:s.legs||{}}],cur:0};
   }catch(e){}
+  let note='';
+  if(editData&&editData.days){if(T&&hasContent(T)&&T.id!==editData.id){normTrip(T);archiveCurrent();note=' · 보던 코스는 📂 내 코스 목록에 넣어뒀어요';}
+    if(!(T&&T.id===editData.id&&(T.at||0)>(editData.at||0)))T=editData;else note=' · 이 폰에 더 최근 수정본이 있어서 그걸 열었어요';
+    setTimeout(()=>toast('수정용 링크로 코스를 열었어요'+note,4000),300);}
   if(!T){T=blankTrip();T.title='성수 산책 코스';const D=T.days[0];D.start={name:'서울숲역',time:'10:00'};D.end={name:'뚝섬한강공원',time:''};
     D.wps=[{id:uid++,purpose:'cafe',name:'',stay:40},{id:uid++,purpose:'meal',name:'',stay:60},{id:uid++,purpose:'store',name:'',stay:10}];}
-  T.days.forEach(D=>{D.legs=D.legs||{};D.wps.forEach(w=>{w.id=w.id||uid++;});});
-  uid=Math.max(uid,...T.days.flatMap(D=>D.wps.map(w=>w.id)),0)+1;
+  normTrip(T);save();
   useDay(T.cur||0);bindEditor();switchDay(T.cur);
 }
 
@@ -533,9 +566,18 @@ function bindEditor(){
     else{b.dataset.c=1;b.textContent='한 번 더 누르면 지워져요';setTimeout(()=>{delete b.dataset.c;b.textContent='이 날 초기화';},3000);}};
   $('delDay').onclick=delDay;
   $('plan').onclick=plan;
+  $('editLink').onclick=async()=>{if(!hasContent(T)){toast('먼저 코스를 입력해주세요');return;}save();
+    const url=location.origin+location.pathname+'#e='+await pack(stripTrip(T));const title=`✏️ [수정용] ${T.title||'코스'}`;
+    if(navigator.share){try{await navigator.share({title,text:title+' (친구에게 보내지 마세요)',url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+    $('linkbox').style.display='block';$('linkText').value=url;
+    try{await navigator.clipboard.writeText(url);toast('수정용 링크를 복사했어요 · 나와의 채팅에 붙여넣으세요',3500);}catch(e){$('linkText').select();}};
+  $('myTrips').onclick=()=>{save();renderTripList();$('tripModal').classList.add('open');};
+  $('closeTrips').onclick=()=>$('tripModal').classList.remove('open');
+  $('tripModal').onclick=e=>{if(e.target.id==='tripModal')$('tripModal').classList.remove('open');};
+  $('newTrip').onclick=()=>{archiveCurrent();const t=blankTrip();t.id=newId();loadTrip(t);$('tripModal').classList.remove('open');toast('새 코스를 만들었어요 · 이전 코스는 목록에 있어요');};
   $('shareLink').onclick=async()=>{const ready=T.days.filter(dayReady).length;if(!ready){toast('먼저 경로를 짜주세요');return;}
     if(ready<T.days.length)toast(`경로가 완성된 ${ready}일치만 공유돼요`,3500);
-    const url=location.href.split('#')[0]+'#v='+await pack(shareData());
+    const url=location.origin+location.pathname+'#v='+await pack(shareData());
     $('linkbox').style.display='block';$('linkText').value=url;
     const title=(T.title||'코스')+(T.days.length>1?` (${T.days.length}일)`:'');
     if(navigator.share){try{await navigator.share({title,text:title,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
