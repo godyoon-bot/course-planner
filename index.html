@@ -18,11 +18,12 @@ body.bike{--acc:var(--bike);--soft:#ddf5ec}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;font-size:15px}
 button,input,select{font:inherit;color:inherit}
-.app{display:flex;flex-direction:column;height:100dvh}
-#mapbox{flex:0 0 46dvh;position:relative;background:#2b2b2b}
+/* phone: the whole page scrolls (so the phone's scroll-capture works) */
+.app{display:flex;flex-direction:column;min-height:100dvh}
+#mapbox{flex:0 0 auto;height:46dvh;position:relative;background:#2b2b2b}
 #map{position:absolute;inset:0}
-.panel{flex:1;overflow:auto;background:#fff;padding-bottom:30px}
-@media(min-width:860px){.app{flex-direction:row-reverse}#mapbox{flex:1;height:100dvh}.panel{flex:0 0 430px;height:100dvh;border-right:1px solid var(--line)}}
+.panel{flex:1 0 auto;background:#fff;padding-bottom:30px}
+@media(min-width:860px){.app{flex-direction:row-reverse;height:100dvh}#mapbox{flex:1;height:100dvh}.panel{flex:0 0 430px;height:100dvh;overflow:auto;border-right:1px solid var(--line)}}
 .sec{padding:14px 16px 0}
 .titlein{border:0;font-size:20px;font-weight:700;width:100%;padding:2px 0;background:transparent}
 .titlein:focus{outline:none;border-bottom:2px solid var(--acc)}
