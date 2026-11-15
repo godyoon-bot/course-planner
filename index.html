@@ -28,6 +28,10 @@ button,input,select{font:inherit;color:inherit}
 .titlein:focus{outline:none;border-bottom:2px solid var(--acc)}
 .vhead h1{font-size:20px;margin:0}
 .badge{display:inline-block;font-size:11px;font-weight:700;background:#f0eee8;color:var(--muted);padding:3px 8px;border-radius:999px;margin-bottom:6px}
+.days{display:flex;gap:6px;overflow-x:auto;margin-top:10px;padding-bottom:2px;scrollbar-width:none}
+.days button{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:500;cursor:pointer}
+.days button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.days button.add{border-style:dashed;color:var(--muted)}
 .seg{display:flex;background:#f0eee8;border-radius:12px;padding:4px;gap:4px;margin-top:10px}
 .seg button{flex:1;border:0;background:transparent;border-radius:9px;padding:9px;cursor:pointer;font-weight:500;color:var(--muted)}
 .seg button.on{background:#fff;color:var(--acc);box-shadow:0 1px 3px rgba(0,0,0,.1)}
@@ -88,6 +92,7 @@ button,input,select{font:inherit;color:inherit}
 .pin .bub b{background:#fff;color:var(--acc);border-radius:50%;min-width:20px;height:20px;display:grid;place-items:center;font-size:11px}
 .pin .tail{width:0;height:0;border:7px solid transparent;border-top-color:#fff;margin-top:-1px}
 .pin.end .bub{background:var(--ink)}.pin.end .bub b{color:var(--ink)}
+.dayDot{background:rgba(29,29,27,.75);color:#fff;font-size:11px;padding:2px 7px;border-radius:999px;white-space:nowrap;pointer-events:none;font-family:"Noto Sans KR",system-ui,sans-serif}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:10px;font-size:13px;z-index:3000;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.show{opacity:1}
 .empty{color:var(--muted);font-size:13px;padding:6px 0 0}
@@ -113,6 +118,9 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
       <div class="vhead"><span class="badge">👀 보기 전용</span><h1 id="vTitle"></h1><div class="speed" id="vMode"></div></div>
       <div class="edit-only">
         <input class="titlein" id="title" placeholder="코스 이름" aria-label="코스 이름">
+      </div>
+      <div class="days" id="days"></div>
+      <div class="edit-only">
         <div class="seg" id="mode"><button data-m="walk">🚶 도보</button><button data-m="bike">🚲 자전거</button></div>
         <div class="speed">평균 속도 <select id="speed"></select> · 실제 길 거리 기준</div>
 
@@ -135,7 +143,7 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
     <div class="sec">
       <div class="lab edit-only">예상 일정</div>
       <div id="result"><div class="empty">출발지와 도착지를 넣어주세요.</div></div>
-      <div class="btns" style="margin-top:8px"><button class="btn" id="copy">📋 일정 복사</button><button class="btn" id="fit">🗺 전체 보기</button><button class="btn edit-only" id="reset" style="border-color:transparent;color:var(--muted)">초기화</button></div>
+      <div class="btns" style="margin-top:8px"><button class="btn" id="copy">📋 일정 복사</button><button class="btn" id="fit">🗺 전체 보기</button><button class="btn edit-only" id="reset" style="border-color:transparent;color:var(--muted)">이 날 초기화</button><button class="btn edit-only" id="delDay" style="border-color:transparent;color:#c0392b">이 날 삭제</button></div>
 
       <div class="sharebox edit-only">
         <h3>친구에게 공유 (보기 전용)</h3>
@@ -164,7 +172,7 @@ const PURPOSES=[
 const P=k=>PURPOSES.find(p=>p.k===k)||PURPOSES[6];
 const MODES={walk:{l:'도보',ic:'🚶',speeds:[3.5,4,4.5,5],url:'https://routing.openstreetmap.de/routed-foot/route/v1/driving/',fb:1.3,color:'#ff5a3c'},
              bike:{l:'자전거',ic:'🚲',speeds:[10,12,13,15,18],url:'https://routing.openstreetmap.de/routed-bike/route/v1/driving/',fb:1.35,color:'#14b886'}};
-let uid=1,S=null,VIEW=false,pick=null,busy=false,map=null,places=null,geocoder=null;
+let uid=1,T=null,S=null,VIEW=false,pick=null,busy=false,map=null,places=null,geocoder=null;
 const overlays=[];
 
 /* ---------- utils ---------- */
@@ -177,11 +185,13 @@ function hm(m){m=((Math.round(m)%1440)+1440)%1440;return String(Math.floor(m/60)
 function dur(m){m=Math.round(m);const h=Math.floor(m/60),r=m%60;return h?(r?`${h}시간 ${r}분`:`${h}시간`):`${r}분`;}
 function km(a,b){const R=6371,r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lng-a.lng)*r;const x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 const fkm=k=>k<1?Math.round(k*100)*10+'m':k.toFixed(1)+'km';
-const blank=()=>({title:'',mode:'walk',speed:{walk:4,bike:13},start:{name:'',time:nowT()},end:{name:'',time:''},wps:[],legs:{}});
+const blankDay=()=>({mode:'walk',start:{name:'',time:'09:00'},end:{name:'',time:''},wps:[],legs:{}});
+const blankTrip=()=>({title:'',speed:{walk:4,bike:13},days:[blankDay()],cur:0});
+function useDay(i){T.cur=Math.max(0,Math.min(i,T.days.length-1));S=T.days[T.cur];}
 function keyed(){S.start.__k='start';S.wps.forEach(w=>w.__k='w'+w.id);S.end.__k='end';}
 const pts=()=>{keyed();return[S.start,...S.wps,S.end];};
 const legKey=(a,b)=>a.__k+'>'+b.__k+'@'+S.mode+'@'+a.lat+','+a.lng+'>'+b.lat+','+b.lng;
-function save(){if(VIEW)return;try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function save(){if(VIEW)return;try{localStorage.setItem(KEY,JSON.stringify(T));}catch(e){}}
 
 /* ---------- share encode ---------- */
 async function pack(obj){const s=new TextEncoder().encode(JSON.stringify(obj));
@@ -190,10 +200,14 @@ async function unpack(str){const t=str[0],buf=unb64(str.slice(1));
   if(t==='z'){const ds=new Blob([buf]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return JSON.parse(await new Response(ds).text());}return JSON.parse(new TextDecoder().decode(buf));}
 function b64(u){let s='';for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function unb64(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
-function shareData(){keyed();const strip=p=>{const o={n:p.name||'',la:+p.lat.toFixed(6),ln:+p.lng.toFixed(6),a:p.addr||''};if(p.purpose){o.p=p.purpose;o.s=+p.stay||0;}return o;};
-  return{v:1,t:S.title||'',m:S.mode,sp:S.speed[S.mode],st:S.start.time||'',et:S.end.time||'',s:strip(S.start),e:strip(S.end),w:S.wps.map(strip)};}
+function shareData(){const strip=p=>{const o={n:p.name||'',la:+p.lat.toFixed(6),ln:+p.lng.toFixed(6),a:p.addr||''};if(p.purpose){o.p=p.purpose;o.s=+p.stay||0;}return o;};
+  return{v:2,t:T.title||'',sp:T.speed,d:T.days.filter(dayReady).map(D=>({m:D.mode,st:D.start.time||'',et:D.end.time||'',s:strip(D.start),e:strip(D.end),w:D.wps.map(strip)}))};}
+function dayReady(D){return [D.start,...D.wps,D.end].every(hasPos)&&mins(D.start.time)!=null;}
 function fromShare(d){const un=o=>{const p={name:o.n,addr:o.a,lat:o.la,lng:o.ln};if(o.p){p.purpose=o.p;p.stay=o.s;p.id=uid++;}return p;};
-  S={title:d.t,mode:d.m==='bike'?'bike':'walk',speed:{walk:4,bike:13},start:un(d.s),end:un(d.e),wps:d.w.map(un),legs:{}};S.speed[S.mode]=d.sp;S.start.time=d.st;S.end.time=d.et;}
+  const mk=x=>{const D={mode:x.m==='bike'?'bike':'walk',start:un(x.s),end:un(x.e),wps:x.w.map(un),legs:{}};D.start.time=x.st;D.end.time=x.et;return D;};
+  if(d.v===1){T={title:d.t,speed:{walk:4,bike:13},days:[mk(d)],cur:0};T.speed[T.days[0].mode]=d.sp;}
+  else T={title:d.t,speed:Object.assign({walk:4,bike:13},d.sp||{}),days:d.d.map(mk),cur:0};
+  useDay(0);}
 
 /* ---------- kakao search ---------- */
 const LL=(lat,lng)=>new kakao.maps.LatLng(lat,lng);
@@ -238,7 +252,7 @@ async function routeMissing(){const L=pts();const jobs=[];let failed=false;
   return !failed;}
 
 /* ---------- schedule ---------- */
-function legOf(a,b){if(!hasPos(a)||!hasPos(b))return null;const r=S.legs[legKey(a,b)];const d=r?r.d:km(a,b)*MODES[S.mode].fb;return{d,min:d/S.speed[S.mode]*60,g:r?r.g:null};}
+function legOf(a,b){if(!hasPos(a)||!hasPos(b))return null;const r=S.legs[legKey(a,b)];const d=r?r.d:km(a,b)*MODES[S.mode].fb;return{d,min:d/T.speed[S.mode]*60,g:r?r.g:null};}
 function schedule(){const L=pts();let t=mins(S.start.time);if(t==null)return null;const rows=[{p:S.start,kind:'start',dep:t}];
   for(let i=1;i<L.length;i++){const lg=legOf(L[i-1],L[i]);if(!lg)return{rows,incomplete:true};t+=lg.min;const r={p:L[i],leg:lg,arr:t,kind:i===L.length-1?'end':'wp'};if(r.kind==='wp'){t+=+L[i].stay||0;r.dep=t;}rows.push(r);}
   return{rows};}
@@ -246,9 +260,9 @@ function schedule(){const L=pts();let t=mins(S.start.time);if(t==null)return nul
 /* ---------- inputs ---------- */
 function renderInputs(){
   document.body.classList.toggle('bike',S.mode==='bike');if(VIEW)return;
-  $('title').value=S.title||'';
+  $('title').value=T.title||'';
   [...$('mode').children].forEach(b=>b.classList.toggle('on',b.dataset.m===S.mode));
-  $('speed').innerHTML=MODES[S.mode].speeds.map(v=>`<option value="${v}"${v===S.speed[S.mode]?' selected':''}>${v} km/h</option>`).join('');
+  $('speed').innerHTML=MODES[S.mode].speeds.map(v=>`<option value="${v}"${v===T.speed[S.mode]?' selected':''}>${v} km/h</option>`).join('');
   $('sName').value=S.start.name||'';$('sTime').value=S.start.time||'';$('eName').value=S.end.name||'';$('eTime').value=S.end.time||'';
   document.querySelectorAll('[data-pick]').forEach(b=>b.classList.toggle('on',pick===b.dataset.pick));
   const box=$('wps');box.innerHTML='';
@@ -330,6 +344,7 @@ function clearMap(){while(overlays.length)overlays.pop().setMap(null);}
 function renderOut(){
   const sc=schedule();const box=$('result');clearMap();
   const times={};if(sc)sc.rows.forEach(r=>times[r.p.__k]=r.kind==='start'?r.dep:r.arr);
+  drawOtherDays();
   if(sc&&!sc.incomplete)drawRoute(sc.rows);
   drawPins(times);
   if(!sc){box.innerHTML='<div class="empty">출발 시간을 넣어주세요.</div>';return;}
@@ -350,6 +365,9 @@ function drawRoute(rows){const M=MODES[S.mode];
   rows.forEach((r,i)=>{if(!r.leg)return;const a=rows[i-1].p,b=r.p;const path=(r.leg.g||[[a.lat,a.lng],[b.lat,b.lng]]).map(c=>LL(c[0],c[1]));
     [{w:10,c:'#000',o:.35},{w:7,c:'#ffffff',o:.95},{w:4.5,c:M.color,o:1,s:r.leg.g?'solid':'shortdash'}].forEach(st=>{
       const pl=new kakao.maps.Polyline({path,strokeWeight:st.w,strokeColor:st.c,strokeOpacity:st.o,strokeStyle:st.s||'solid'});pl.setMap(map);overlays.push(pl);});});}
+function drawOtherDays(){T.days.forEach((D,i)=>{if(i===T.cur)return;Object.values(D.legs||{}).forEach(l=>{if(!l.g)return;
+  const pl=new kakao.maps.Polyline({path:l.g.map(c=>LL(c[0],c[1])),strokeWeight:4,strokeColor:'#ffffff',strokeOpacity:.55,strokeStyle:'shortdot'});pl.setMap(map);overlays.push(pl);});
+  const mine=pts().filter(hasPos);[D.start,D.end].forEach((p,j)=>{if(!hasPos(p)||mine.some(q=>km(p,q)<.05))return;const ov=new kakao.maps.CustomOverlay({position:LL(p.lat,p.lng),yAnchor:.5,zIndex:1,content:`<div class="dayDot">${i+1}일${j?' 도착':' 출발'}</div>`});ov.setMap(map);overlays.push(ov);});});}
 function drawPins(times){
   pts().forEach(p=>{if(!hasPos(p))return;const k=p.__k,isS=k==='start',isE=k==='end';
     const badge=isS?'출':isE?'도':P(p.purpose).e;const t=times[k]!=null?hm(times[k])+' ':'';
@@ -397,26 +415,50 @@ async function boot(){
   $('copy').onclick=copySchedule;
 
   if(shared){VIEW=true;document.body.classList.add('view');fromShare(shared);
-    $('vTitle').textContent=S.title||`${MODES[S.mode].l} 코스`;$('vMode').textContent=`${MODES[S.mode].ic} ${MODES[S.mode].l} · 평균 ${S.speed[S.mode]}km/h 기준`;
-    document.title=(S.title||'코스')+' (보기 전용)';$('pickbar').remove();
-    renderInputs();renderOut();setTimeout(fitAll,50);await routeMissing();renderOut();fitAll();return;}
+    $('vTitle').textContent=T.title||'코스';
+    document.title=(T.title||'코스')+' (보기 전용)';$('pickbar').remove();
+    switchDay(0);for(let i=0;i<T.days.length;i++){useDay(i);await routeMissing();}useDay(0);renderDays();renderOut();fitAll();return;}
 
-  try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.start){S=s;S.legs=S.legs||{};}}catch(e){}
-  if(!S){S=blank();S.title='성수 산책 코스';S.start={name:'서울숲역',time:'10:00'};S.end={name:'뚝섬한강공원',time:''};
-    S.wps=[{id:uid++,purpose:'cafe',name:'',stay:40},{id:uid++,purpose:'meal',name:'',stay:60},{id:uid++,purpose:'store',name:'',stay:10}];}
-  S.wps.forEach(w=>{w.id=w.id||uid++;});uid=Math.max(uid,...S.wps.map(w=>w.id),0)+1;
-  bindEditor();renderInputs();renderOut();setTimeout(fitAll,50);
+  try{const s=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(s&&s.days&&s.days.length)T=s;
+    else if(s&&s.start)T={title:s.title||'',speed:s.speed||{walk:4,bike:13},days:[{mode:s.mode||'walk',start:s.start,end:s.end,wps:s.wps||[],legs:s.legs||{}}],cur:0};
+  }catch(e){}
+  if(!T){T=blankTrip();T.title='성수 산책 코스';const D=T.days[0];D.start={name:'서울숲역',time:'10:00'};D.end={name:'뚝섬한강공원',time:''};
+    D.wps=[{id:uid++,purpose:'cafe',name:'',stay:40},{id:uid++,purpose:'meal',name:'',stay:60},{id:uid++,purpose:'store',name:'',stay:10}];}
+  T.days.forEach(D=>{D.legs=D.legs||{};D.wps.forEach(w=>{w.id=w.id||uid++;});});
+  uid=Math.max(uid,...T.days.flatMap(D=>D.wps.map(w=>w.id)),0)+1;
+  useDay(T.cur||0);bindEditor();switchDay(T.cur);
 }
 
-function copySchedule(){const sc=schedule();if(!sc||sc.incomplete){toast('먼저 경로를 짜주세요');return;}const M=MODES[S.mode];
-  const out=[`[${S.title||M.l+' 코스'}] ${M.ic}`];sc.rows.forEach((r,i)=>{const p=r.p;const nm=r.kind==='start'?'출발 '+p.name:r.kind==='end'?'도착 '+p.name:`${P(p.purpose).e} ${p.name||P(p.purpose).l} (${p.stay}분)`;
-    out.push(`${hm(r.kind==='start'?r.dep:r.arr)} ${nm}`);const n=sc.rows[i+1];if(n)out.push(`   ↓ ${fkm(n.leg.d)} · ${dur(Math.max(1,n.leg.min))}`);});
+/* ---------- days ---------- */
+function renderDays(){const el=$('days');
+  el.innerHTML=T.days.map((D,i)=>`<button data-d="${i}" class="${i===T.cur?'on':''}">${i+1}일차</button>`).join('')+(VIEW?'':'<button data-add="1" class="add">＋ 일차 추가</button>');
+  el.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>switchDay(+b.dataset.d));
+  const a=el.querySelector('[data-add]');if(a)a.onclick=addDay;
+  if(!VIEW)$('delDay').style.display=T.days.length>1?'':'none';
+  if(VIEW)$('vMode').textContent=`${T.cur+1}일차 · ${MODES[S.mode].ic} ${MODES[S.mode].l} · 평균 ${T.speed[S.mode]}km/h 기준`;
+  el.style.display=T.days.length>1||!VIEW?'':'none';}
+async function switchDay(i){if(pick)startPick(pick);useDay(i);save();renderDays();renderInputs();renderOut();setTimeout(fitAll,30);
+  if(pts().filter(hasPos).length>=2&&!VIEW){await routeMissing();renderOut();}}
+function addDay(){const prev=T.days[T.days.length-1];const D=blankDay();D.mode=prev.mode;
+  if(prev.end&&(prev.end.name||hasPos(prev.end))){const e=prev.end;D.start={name:e.name,lat:e.lat,lng:e.lng,addr:e.addr,q:e.q,manual:e.manual};}
+  D.start.time=prev.start.time||'09:00';
+  T.days.push(D);switchDay(T.days.length-1);toast(`${T.days.length}일차를 만들었어요${D.start.name?' · 출발지는 전날 도착지로 넣었어요':''}`);}
+function delDay(){const b=$('delDay');if(!b.dataset.c){b.dataset.c=1;b.textContent=`${T.cur+1}일차를 지울까요? 한 번 더 누르세요`;setTimeout(()=>{delete b.dataset.c;b.textContent='이 날 삭제';},3000);return;}
+  delete b.dataset.c;b.textContent='이 날 삭제';T.days.splice(T.cur,1);switchDay(Math.min(T.cur,T.days.length-1));toast('삭제했어요');}
+
+function copySchedule(){const cur=T.cur;const out=[`[${T.title||'코스'}]`];let any=false;
+  T.days.forEach((D,di)=>{useDay(di);const sc=schedule();if(!sc||sc.incomplete)return;any=true;const M=MODES[S.mode];
+    if(T.days.length>1)out.push('',`■ ${di+1}일차 ${M.ic}`);else out[0]+=' '+M.ic;
+    sc.rows.forEach((r,i)=>{const p=r.p;const nm=r.kind==='start'?'출발 '+p.name:r.kind==='end'?'도착 '+p.name:`${P(p.purpose).e} ${p.name||P(p.purpose).l} (${p.stay}분)`;
+    out.push(`${hm(r.kind==='start'?r.dep:r.arr)} ${nm}`);const n=sc.rows[i+1];if(n)out.push(`   ↓ ${fkm(n.leg.d)} · ${dur(Math.max(1,n.leg.min))}`);});});
+  useDay(cur);if(!any){toast('먼저 경로를 짜주세요');return;}
   navigator.clipboard.writeText(out.join('\n')).then(()=>toast('일정을 복사했어요'),()=>toast('복사가 막혀 있어요'));}
 
 function bindEditor(){
-  $('title').oninput=e=>{S.title=e.target.value;save();};
+  $('title').oninput=e=>{T.title=e.target.value;save();};
   $('mode').onclick=async e=>{const m=e.target.closest('button')?.dataset.m;if(!m||m===S.mode)return;S.mode=m;renderInputs();renderOut();if(pts().filter(hasPos).length>=2){toast(`${MODES[m].l} 경로로 다시 찾는 중…`);await routeMissing();renderOut();}save();};
-  $('speed').onchange=e=>{S.speed[S.mode]=parseFloat(e.target.value);save();renderOut();};
+  $('speed').onchange=e=>{T.speed[S.mode]=parseFloat(e.target.value);save();renderOut();};
   const bind=(id,get,f)=>$(id).addEventListener('input',e=>{const p=get();p[f]=e.target.value;if(f==='name'){p.auto=false;clearPos(p);}save();renderOut();});
   bind('sName',()=>S.start,'name');bind('eName',()=>S.end,'name');bind('sTime',()=>S.start,'time');bind('eTime',()=>S.end,'time');
   attachAuto($('sName'),()=>S.start);attachAuto($('eName'),()=>S.end);
@@ -427,13 +469,15 @@ function bindEditor(){
     if(!pts().every(hasPos)){toast('먼저 모든 위치를 찍어주세요');return;}if(ws.length>8){toast('경유지 8곳까지만 돼요');return;}
     let best=null,bd=1e9;const perm=(arr,l)=>{if(!arr.length){let d=0,p=S.start;for(const w of l){d+=km(p,w);p=w;}d+=km(p,S.end);if(d<bd){bd=d;best=l;}return;}arr.forEach((x,i)=>perm(arr.filter((_,j)=>j!==i),[...l,x]));};
     perm(ws,[]);const ch=best.some((w,i)=>w!==ws[i]);S.wps=best;changed();toast(ch?'가장 짧은 순서로 바꿨어요':'지금 순서가 이미 가장 짧아요');};
-  $('reset').onclick=()=>{const b=$('reset');if(b.dataset.c){const m=S.mode,sp=S.speed;S=blank();S.mode=m;S.speed=sp;save();renderInputs();renderOut();b.textContent='초기화';delete b.dataset.c;}
-    else{b.dataset.c=1;b.textContent='한 번 더 누르면 지워져요';setTimeout(()=>{delete b.dataset.c;b.textContent='초기화';},3000);}};
+  $('reset').onclick=()=>{const b=$('reset');if(b.dataset.c){const D=blankDay();D.mode=S.mode;T.days[T.cur]=D;useDay(T.cur);save();renderInputs();renderOut();b.textContent='이 날 초기화';delete b.dataset.c;}
+    else{b.dataset.c=1;b.textContent='한 번 더 누르면 지워져요';setTimeout(()=>{delete b.dataset.c;b.textContent='이 날 초기화';},3000);}};
+  $('delDay').onclick=delDay;
   $('plan').onclick=plan;
-  $('shareLink').onclick=async()=>{const sc=schedule();if(!sc||sc.incomplete){toast('먼저 경로를 짜주세요');return;}
+  $('shareLink').onclick=async()=>{const ready=T.days.filter(dayReady).length;if(!ready){toast('먼저 경로를 짜주세요');return;}
+    if(ready<T.days.length)toast(`경로가 완성된 ${ready}일치만 공유돼요`,3500);
     const url=location.href.split('#')[0]+'#v='+await pack(shareData());
     $('linkbox').style.display='block';$('linkText').value=url;
-    const title=(S.title||'코스')+' — '+MODES[S.mode].l+' 코스';
+    const title=(T.title||'코스')+(T.days.length>1?` (${T.days.length}일)`:'');
     if(navigator.share){try{await navigator.share({title,text:title,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
     try{await navigator.clipboard.writeText(url);toast('링크를 복사했어요 · 카톡에 붙여넣으세요');}catch(e){$('linkText').select();toast('링크를 길게 눌러 복사하세요');}};
 }
