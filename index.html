@@ -98,6 +98,23 @@ button,input,select{font:inherit;color:inherit}
 .gpxpick{display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:12px}
 .gpxpick .ph{width:100%;font-size:12px;color:var(--muted)}
 .gpxpick .btn:disabled{opacity:.4}
+.apptabs{display:flex;gap:0;border-bottom:1px solid var(--line);background:#fff}
+.apptabs button{flex:1;border:0;background:transparent;padding:13px 6px;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent}
+.apptabs button.on{color:var(--ink);border-bottom-color:var(--acc)}
+.runui{display:none}body.run .runui{display:block}body.run .trip-only{display:none!important}
+body.run{--acc:#3d6bff;--soft:#e7edff}
+#rvhead{display:none}body.view.run #rvhead{display:block}
+.rcard{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;cursor:pointer}
+.rcard.on{border-color:var(--acc);box-shadow:0 0 0 2px var(--soft)}
+.rcard .top{display:flex;align-items:baseline;gap:8px}.rcard .top b{font-size:17px}.rcard .top span{font-size:13px;color:var(--muted)}
+.rcard .meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+.rcard .btns{margin-top:8px}
+.rgroup{font-size:13px;font-weight:700;margin:16px 0 8px}
+.spots{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.spot{flex:0 0 auto;border:1px solid var(--line);border-radius:12px;padding:7px 10px;font-size:12px;background:#fcfbf8;cursor:pointer}
+.spot b{display:block;font-size:13px}
+.kmDot{background:#fff;color:#3d6bff;border:2px solid #3d6bff;border-radius:999px;font-size:10px;font-weight:700;padding:0 5px;font-family:"Noto Sans KR",system-ui,sans-serif;pointer-events:none}
+.spotDot{width:10px;height:10px;border-radius:50%;background:#2ecc71;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
 .hill{color:var(--muted);font-weight:400}
 .prof{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:-4px 0 12px}
 .prof svg{width:100%;height:70px;display:block}
@@ -131,7 +148,24 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
     <div class="fatal" id="fatal"></div>
   </div>
   <div class="panel">
-    <div class="sec">
+    <div class="apptabs edit-only" id="apptabs"><button data-app="trip">🗺 여행 코스</button><button data-app="run">🏃 러닝 코스</button></div>
+    <div class="sec runui" id="runui">
+      <div class="vhead" id="rvhead"><span class="badge">👀 보기 전용</span><h1 id="rvTitle"></h1></div>
+      <div class="edit-only">
+        <div class="lab"><span class="dot"></span>출발 위치 (숙소·역 등)</div>
+        <div class="row"><div class="acwrap"><input class="inp" id="rName" placeholder="장소 이름 또는 주소" autocomplete="off"></div><button class="icon" id="rHere" title="내 위치">📍</button><button class="icon" id="rPick" title="지도에서 찍기">🎯</button></div>
+        <div class="addr" id="rAddr"></div>
+        <div class="lab">거리 <span style="font-weight:400">(여러 개 선택 가능)</span></div>
+        <div class="chips" id="rDist"></div>
+        <div class="speed">페이스 <select id="rPace"></select> /km</div>
+        <div style="margin-top:14px"><button class="btn primary" id="rFind">🏃 주변 러닝 코스 찾기</button></div>
+        <div class="hint" id="rStatus"></div>
+      </div>
+      <div id="rSpots"></div>
+      <div id="rResults"></div>
+      <div class="hint">· 출발점에서 시작해 출발점으로 돌아오는 순환 코스예요. 공원·하천·산책로를 지나도록 우선 골라요.<br>· 길찾기: OSRM(OpenStreetMap) 도보 경로 · 장소: 카카오맵 · 고도: Copernicus DEM, Open-Meteo<br>· 밤에는 인적이 드문 공원·하천길보다 밝은 큰길 위주 코스를 고르세요.</div>
+    </div>
+    <div class="sec trip-only">
       <div class="vhead"><span class="badge">👀 보기 전용</span><h1 id="vTitle"></h1><div class="speed" id="vMode"></div></div>
       <div class="edit-only">
         <input class="titlein" id="title" placeholder="코스 이름" aria-label="코스 이름">
@@ -157,7 +191,7 @@ hr{border:0;border-top:1px solid var(--line);margin:18px 0 0}
         <hr>
       </div>
     </div>
-    <div class="sec">
+    <div class="sec trip-only">
       <div class="lab edit-only">예상 일정</div>
       <div id="result"><div class="empty">출발지와 도착지를 넣어주세요.</div></div>
       <div class="btns" style="margin-top:8px"><button class="btn" id="copy">📋 일정 복사</button><button class="btn" id="gpx">📥 GPX 받기</button><button class="btn" id="fit">🗺 전체 보기</button><button class="btn edit-only" id="reset" style="border-color:transparent;color:var(--muted)">이 날 초기화</button><button class="btn edit-only" id="delDay" style="border-color:transparent;color:#c0392b">이 날 삭제</button></div>
@@ -302,12 +336,14 @@ function resample(g){ // -> [{lat,lng,d(km)}], ≤100 pts, ~every 60m
 function smooth(a){return a.map((_,i)=>{const w=a.slice(Math.max(0,i-2),i+3).slice().sort((x,y)=>x-y);return w[w.length>>1];});}
 async function elevMissing(){
   const todo=Object.values(S.legs).filter(l=>l.g&&l.g.length>1&&!l.e&&!l.eFail);if(!todo.length)return;
-  for(const l of todo){const pts2=resample(l.g);if(pts2.length<2){l.eFail=1;continue;}
-    try{const u=`https://api.open-meteo.com/v1/elevation?latitude=${pts2.map(p=>p.lat.toFixed(5)).join(',')}&longitude=${pts2.map(p=>p.lng.toFixed(5)).join(',')}`;
-      const r=await (await fetch(u)).json();if(!r.elevation||r.elevation.length!==pts2.length)throw 0;
-      const z=smooth(r.elevation.map(Number));l.e=pts2.map((p,i)=>[+p.d.toFixed(4),Math.round(z[i]*10)/10]);}
-    catch(e){l.eFail=1;}}
+  for(const l of todo)await elevOne(l);
   save();}
+async function elevOne(l){const pts2=resample(l.g);if(pts2.length<2){l.eFail=1;return;}
+  try{const u=`https://api.open-meteo.com/v1/elevation?latitude=${pts2.map(p=>p.lat.toFixed(5)).join(',')}&longitude=${pts2.map(p=>p.lng.toFixed(5)).join(',')}`;
+    const r=await (await fetch(u)).json();if(!r.elevation||r.elevation.length!==pts2.length)throw 0;
+    const z=smooth(r.elevation.map(Number));l.e=pts2.map((p,i)=>[+p.d.toFixed(4),Math.round(z[i]*10)/10]);}
+  catch(e){l.eFail=1;}}
+function elevGain(l){if(!l.e)return null;let up=0;for(let i=1;i<l.e.length;i++){const dz=l.e[i][1]-l.e[i-1][1];if(dz>0)up+=dz;}return up;}
 function bikeSpeed(v0,sl){ // physics: same power as on flat; m/s
   const m=85,g=9.81,crr=.006,k=.33;const P0=crr*m*g*v0+k*v0**3;const P=sl>.01?Math.max(P0*1.8,90):P0;let lo=.3,hi=20; // riders push harder on climbs
   for(let i=0;i<40;i++){const v=(lo+hi)/2;(m*g*(crr+sl)*v+k*v**3>P)?hi=v:lo=v;}
@@ -370,7 +406,7 @@ function addrLine(el,p){if(!el)return;
   el.innerHTML=b.join('<span>·</span>');
   if(p.cands&&p.cands.length>1&&!p.manual){const s=document.createElement('select');
     s.innerHTML=p.cands.map((c,i)=>`<option value="${i}"${c.lat===p.lat&&c.lng===p.lng?' selected':''}>${esc(c.name)} — ${esc(c.addr||'')}</option>`).join('');
-    s.onchange=()=>{const c=p.cands[+s.value];p.lat=c.lat;p.lng=c.lng;p.addr=c.addr;delete p.approx;placed(p);};
+    s.onchange=()=>{const c=p.cands[+s.value];p.lat=c.lat;p.lng=c.lng;p.addr=c.addr;delete p.approx;(p===R.start?runPlaced:placed)(p);};
     el.appendChild(s);}
 }
 function refreshAddrs(){if(VIEW)return;addrLine($('sAddr'),S.start);addrLine($('eAddr'),S.end);S.wps.forEach(w=>addrLine(document.querySelector(`.wp[data-k="w${w.id}"] .addr`),w));}
@@ -378,15 +414,15 @@ function clearPos(p){['lat','lng','addr','manual','cands','notFound','q','approx
 async function changed(){save();renderInputs();renderOut();if(pts().filter(hasPos).length>=2){await routeMissing();save();renderOut();}}
 
 /* ---------- search as you type ---------- */
-function nearOf(p){const L=pts();const i=L.indexOf(p);const n=[...L.slice(0,i)].reverse().find(hasPos)||L.slice(i+1).find(hasPos);if(n)return n;const c=map.getCenter();return{lat:c.getLat(),lng:c.getLng()};}
-function attachAuto(inp,get){
+function nearOf(p){if(APP==='run'){if(hasPos(p))return p;const c=map.getCenter();return{lat:c.getLat(),lng:c.getLng()};}const L=pts();const i=L.indexOf(p);const n=[...L.slice(0,i)].reverse().find(hasPos)||L.slice(i+1).find(hasPos);if(n)return n;const c=map.getCenter();return{lat:c.getLat(),lng:c.getLng()};}
+function attachAuto(inp,get,onPlaced){const done=p=>(onPlaced||placed)(p);
   const box=document.createElement('div');box.className='ac';inp.parentElement.appendChild(box);
   let timer=null,seq=0,items=[],hl=-1;
   const hide=()=>{box.style.display='none';hl=-1;};
   const show=()=>{box.innerHTML=items.map((c,i)=>`<div data-i="${i}" class="${i===hl?'hl':''}">${esc(c.name)}<small>${esc([c.cat,c.addr].filter(Boolean).join(' · '))}</small></div>`).join('');
     box.style.display=items.length&&document.activeElement===inp?'block':'none';};
   const choose=c=>{const p=get();hide();p.lat=c.lat;p.lng=c.lng;p.addr=c.addr||'';p.cands=items.slice();['notFound','approx','searching','manual','auto'].forEach(k=>delete p[k]);
-    if(!c.house&&c.name){p.name=c.name;inp.value=c.name;}p.q=p.name;placed(p);};
+    if(!c.house&&c.name){p.name=c.name;inp.value=c.name;}p.q=p.name;done(p);};
   const commit=async()=>{const p=get();const q=(p.name||'').trim();hide();
     if(!q||hasPos(p)||p.q===q||p.auto)return;
     p.searching=true;p.q=q;refreshAddrs();
@@ -394,7 +430,7 @@ function attachAuto(inp,get){
     if((p.name||'').trim()!==q)return;
     delete p.searching;
     if(r.cands.length){const c=r.cands[0];p.lat=c.lat;p.lng=c.lng;p.addr=c.addr;p.cands=r.cands;if(r.approx)p.approx=true;delete p.notFound;}else p.notFound=true;
-    placed(p);};
+    done(p);};
   inp.addEventListener('input',()=>{clearTimeout(timer);const q=inp.value.trim();items=[];hl=-1;hide();if(q.length<2)return;const my=++seq;
     timer=setTimeout(async()=>{const p=get();const [k,a]=await Promise.all([kwSearch(q,nearOf(p),6),looksAddr(q)?addrSearch(q):Promise.resolve([])]);if(my!==seq)return;
       items=dedupe(looksAddr(q)?[...a,...k]:[...k,...a]);show();
@@ -414,7 +450,7 @@ async function placed(p){save();refreshAddrs();renderOut();
 
 /* ---------- output ---------- */
 function clearMap(){while(overlays.length)overlays.pop().setMap(null);}
-function renderOut(){
+function renderOut(){if(APP==='run')return;
   const sc=schedule();const box=$('result');clearMap();
   const times={};if(sc)sc.rows.forEach(r=>times[r.p.__k]=r.kind==='start'?r.dep:r.arr);
   drawOtherDays();
@@ -467,7 +503,7 @@ function drawPins(times){
     const label=t+(p.name||(isS?'출발':isE?'도착':P(p.purpose).l));
     const ov=new kakao.maps.CustomOverlay({position:LL(p.lat,p.lng),yAnchor:1,zIndex:isE?5:isS?4:3,content:`<div class="pin${isE?' end':''}"><div class="bub"><b>${badge}</b>${esc(label)}</div><div class="tail"></div></div>`});
     ov.setMap(map);overlays.push(ov);});}
-function fitAll(){const b=new kakao.maps.LatLngBounds();let n=0;pts().forEach(p=>{if(hasPos(p)){b.extend(LL(p.lat,p.lng));n++;}});
+function fitAll(){if(APP==='run'){runFit();return;}const b=new kakao.maps.LatLngBounds();let n=0;pts().forEach(p=>{if(hasPos(p)){b.extend(LL(p.lat,p.lng));n++;}});
   Object.values(S.legs).forEach(l=>l.g&&l.g.forEach((c,i)=>{if(i%4===0){b.extend(LL(c[0],c[1]));}}));
   if(!n)return;if(n===1){const p=pts().find(hasPos);map.setCenter(LL(p.lat,p.lng));map.setLevel(3);}else map.setBounds(b,70,40,40,40);}
 
@@ -486,6 +522,139 @@ function loadSdk(){return new Promise((res,rej)=>{if(!KAKAO_KEY){rej('nokey');re
   s.onload=()=>{if(window.kakao&&kakao.maps&&kakao.maps.load)kakao.maps.load(res);else rej('auth');};s.onerror=()=>rej('net');document.head.appendChild(s);
   setTimeout(()=>rej('timeout'),12000);});}
 
+/* ================= 러닝 코스 ================= */
+let APP='trip',rPick=false,rSel=0;
+let R={start:{name:''},dists:[3,5],pace:360,spots:[],res:{}};
+const DISTS=[3,5,7,10];
+const SPOT_KW=[['러닝코스',3],['조깅',3],['트랙 운동장',2],['산책로',2],['둘레길',2],['공원',1],['하천',1],['호수공원',2]];
+function runSave(){if(VIEW)return;try{localStorage.setItem(KEY+':run',JSON.stringify(R,(k,v)=>['cands','searching','__k'].includes(k)?undefined:v));}catch(e){}}
+function offsetPt(p,brg,dk){const r=6371,b=brg*Math.PI/180,la=p.lat*Math.PI/180,lo=p.lng*Math.PI/180,d=dk/r;
+  const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(b));const lo2=lo+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));
+  return{lat:la2*180/Math.PI,lng:lo2*180/Math.PI};}
+function bearing(a,b){const r=Math.PI/180,y=Math.sin((b.lng-a.lng)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lng-a.lng)*r);return(Math.atan2(y,x)/r+360)%360;}
+async function osrmFoot(coords){const url=MODES.walk.url+coords.map(c=>`${c.lng.toFixed(6)},${c.lat.toFixed(6)}`).join(';')+'?overview=full&geometries=geojson&continue_straight=false';
+  try{const r=await (await fetch(url)).json();if(r.code==='Ok'&&r.routes[0])return{d:r.routes[0].distance/1000,g:r.routes[0].geometry.coordinates.map(c=>[+c[1].toFixed(5),+c[0].toFixed(5)])};}catch(e){}return null;}
+function overlapRatio(g){const pts=resample(g);if(pts.length<6)return 0;let rep=0;
+  for(let i=0;i<pts.length;i++){for(let j=0;j<i;j++){if(pts[i].d-pts[j].d<.25)break;if(km(pts[i],pts[j])<.025){rep++;break;}}}return rep/pts.length;}
+function spotsNear(g){const hit=[];R.spots.forEach(sp=>{for(let i=0;i<g.length;i+=2){if(km(sp,{lat:g[i][0],lng:g[i][1]})<.15){hit.push(sp);break;}}});return hit;}
+async function findSpots(p){
+  const all=[];const seen=new Set();
+  for(const [kw,w] of SPOT_KW){const res=await new Promise(r=>places.keywordSearch(kw,(d,st)=>r(st===kakao.maps.services.Status.OK?d.map(fromPlace):[]),{location:LL(p.lat,p.lng),radius:3000,sort:kakao.maps.services.SortBy.DISTANCE,size:10}));
+    res.forEach(x=>{if(seen.has(x.name))return;if(/주차장|화장실|관리사무소|매점|편의점|입구$|정류장/.test(x.name))return;seen.add(x.name);x.w=w;x.dk=km(p,x);all.push(x);});}
+  all.forEach(x=>x.score=x.w*1.2-x.dk*.6);all.sort((a,b)=>b.score-a.score);
+  // drop spots too close to a better one
+  const out=[];all.forEach(x=>{if(!out.some(o=>km(o,x)<.25))out.push(x);});return out.slice(0,12);}
+async function tuneLoop(start,mk,D){ // mk(scale) -> via points
+  let sc=1,best=null;
+  for(let it=0;it<3;it++){const via=mk(sc);const r=await osrmFoot([start,...via,start]);if(!r)break;
+    const err=Math.abs(r.d-D)/D;if(!best||err<best.err)best={...r,via,err};if(err<.07)break;sc*=Math.pow(D/r.d,.9);if(sc>3||sc<.25)break;}
+  return best;}
+async function runCandidates(start,D,onStep){
+  const cands=[];const rf=1.3; // road factor
+  const near=R.spots.filter(x=>x.dk<D/2.4&&x.dk>.15).slice(0,3);
+  const jobs=[];
+  near.forEach(sp=>{const b0=bearing(start,sp),ds=km(start,sp);const rBase=Math.max(ds,D/(3*rf));
+    [65,-65].forEach(side=>jobs.push({label:sp.name,spot:sp,via:sc=>[{lat:sp.lat,lng:sp.lng},offsetPt(start,b0+side,rBase*sc)]}));});
+  [0,120,240].forEach(b=>jobs.push({label:'',via:sc=>{const r=D/(3*rf)*sc;return[offsetPt(start,b-30,r),offsetPt(start,b+30,r)];}}));
+  // limit to 6 jobs, interleave spot / geometric
+  const chosen=[];const sp=jobs.filter(j=>j.spot),ge=jobs.filter(j=>!j.spot);while(chosen.length<6&&(sp.length||ge.length)){if(sp.length)chosen.push(sp.shift());if(ge.length&&chosen.length<6)chosen.push(ge.shift());}
+  let n=0;
+  for(const j of chosen){onStep&&onStep(++n,chosen.length);const r=await tuneLoop(start,j.via,D);if(!r||r.err>.25)continue;
+    const ov=overlapRatio(r.g);const hits=spotsNear(r.g);r.ov=ov;r.hits=hits.map(h=>h.name).slice(0,4);
+    r.score=r.err*3+ov*1.6-Math.min(hits.reduce((s,h)=>s+h.w,0),5)*.12;cands.push(r);}
+  cands.sort((a,b)=>a.score-b.score);
+  const pick=[];cands.forEach(c=>{if(pick.length>=2)return;if(pick.some(p=>{let same=0;const ps=resample(p.g);ps.forEach(q=>{if(c.g.some((g,i)=>i%3===0&&km(q,{lat:g[0],lng:g[1]})<.04))same++;});return same/ps.length>.6;}))return;pick.push(c);});
+  for(const c of pick){c.d=+c.d.toFixed(2);await elevOne(c);c.up=elevGain(c);}
+  return pick.map(c=>({d:c.d,g:c.g,via:c.via.map(v=>({lat:+v.lat.toFixed(6),lng:+v.lng.toFixed(6)})),e:c.e,up:c.up,hits:c.hits,ov:+c.ov.toFixed(2)}));}
+
+function fmtPace(sec){return `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;}
+function renderRunInputs(){if(VIEW)return;
+  $('rName').value=R.start.name||'';addrLine($('rAddr'),R.start);
+  $('rDist').innerHTML=DISTS.map(d=>`<button class="chip${R.dists.includes(d)?' on':''}" data-d="${d}">${d}km</button>`).join('');
+  $('rDist').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const d=+b.dataset.d;R.dists=R.dists.includes(d)?R.dists.filter(x=>x!==d):[...R.dists,d].sort((a,b)=>a-b);if(!R.dists.length)R.dists=[d];runSave();renderRunInputs();});
+  const paces=[];for(let p=240;p<=480;p+=15)paces.push(p);
+  $('rPace').innerHTML=paces.map(p=>`<option value="${p}"${p===R.pace?' selected':''}>${fmtPace(p)}</option>`).join('');
+  $('rPick').classList.toggle('on',rPick);}
+function runResultsFlat(){const out=[];Object.keys(R.res).map(Number).sort((a,b)=>a-b).forEach(D=>(R.res[D]||[]).forEach((c,i)=>out.push({D,i,c})));return out;}
+function renderRun(){
+  clearMap();
+  // spots
+  const sp=$('rSpots');
+  if(R.spots.length&&!VIEW){sp.innerHTML=`<div class="rgroup">🌳 주변 달리기 좋은 곳</div><div class="spots">${R.spots.slice(0,8).map((x,i)=>`<div class="spot" data-i="${i}"><b>${esc(x.name)}</b>${esc(x.cat||'')} · ${fkm(x.dk)}</div>`).join('')}</div>`;
+    sp.querySelectorAll('.spot').forEach(el=>el.onclick=()=>{const x=R.spots[+el.dataset.i];map.setCenter(LL(x.lat,x.lng));map.setLevel(4);});}
+  else sp.innerHTML='';
+  R.spots.slice(0,8).forEach(x=>{const ov=new kakao.maps.CustomOverlay({position:LL(x.lat,x.lng),zIndex:1,content:'<div class="spotDot"></div>'});ov.setMap(map);overlays.push(ov);});
+  // results
+  const list=runResultsFlat();const box=$('rResults');
+  if(!list.length){box.innerHTML=VIEW?'':'';drawRunStart();return;}
+  if(rSel>=list.length)rSel=0;
+  let h='';let lastD=null;
+  list.forEach((x,k)=>{const c=x.c;if(x.D!==lastD){h+=`<div class="rgroup">${x.D}km 코스</div>`;lastD=x.D;}
+    const t=Math.round(c.d*R.pace/60);
+    h+=`<div class="rcard${k===rSel?' on':''}" data-k="${k}"><div class="top"><b>${VIEW?'':'코스 '+'AB'[x.i]+' · '}${c.d.toFixed(1)}km</b><span>약 ${dur(t)} (${fmtPace(R.pace)}/km)</span></div>
+      <div class="meta">${c.up!=null?`⛰ 오르막 +${Math.round(c.up)}m · `:''}${c.hits&&c.hits.length?'지나는 곳: '+c.hits.map(esc).join(', '):'주로 동네 길'}${c.ov>.25?' · 일부 같은 길 왕복':''}</div>
+      ${k===rSel?`<div class="btns"><button class="btn" data-gpx="${k}">📥 GPX</button>${VIEW?'':`<button class="btn share" data-share="${k}">🔗 공유</button>`}</div>`:''}</div>`;});
+  box.innerHTML=h;
+  box.querySelectorAll('.rcard').forEach(el=>el.onclick=e=>{if(e.target.closest('button'))return;rSel=+el.dataset.k;renderRun();runFit();});
+  box.querySelectorAll('[data-gpx]').forEach(b=>b.onclick=()=>{const x=list[+b.dataset.gpx];runGpx(x);});
+  box.querySelectorAll('[data-share]').forEach(b=>b.onclick=()=>runShare(list[+b.dataset.share]));
+  // other courses faint, selected strong
+  list.forEach((x,k)=>{if(k===rSel)return;const pl=new kakao.maps.Polyline({path:x.c.g.map(c=>LL(c[0],c[1])),strokeWeight:3,strokeColor:'#ffffff',strokeOpacity:.5,strokeStyle:'shortdash'});pl.setMap(map);overlays.push(pl);});
+  const c=list[rSel].c;const path=c.g.map(q=>LL(q[0],q[1]));
+  [{w:10,c:'#000',o:.35},{w:7,c:'#fff',o:.95},{w:4.5,c:'#3d6bff',o:1}].forEach(st=>{const pl=new kakao.maps.Polyline({path,strokeWeight:st.w,strokeColor:st.c,strokeOpacity:st.o});pl.setMap(map);overlays.push(pl);});
+  // km markers
+  let acc=0,next=1;for(let i=1;i<c.g.length;i++){const a={lat:c.g[i-1][0],lng:c.g[i-1][1]},b={lat:c.g[i][0],lng:c.g[i][1]};const d=km(a,b);
+    while(acc+d>=next&&next<c.d-.05){const f=(next-acc)/d;const ov=new kakao.maps.CustomOverlay({position:LL(a.lat+(b.lat-a.lat)*f,a.lng+(b.lng-a.lng)*f),zIndex:4,content:`<div class="kmDot">${next}km</div>`});ov.setMap(map);overlays.push(ov);next++;}acc+=d;}
+  drawRunStart();}
+function drawRunStart(){if(!hasPos(R.start))return;const ov=new kakao.maps.CustomOverlay({position:LL(R.start.lat,R.start.lng),yAnchor:1,zIndex:6,content:`<div class="pin"><div class="bub"><b>🏃</b>${esc(R.start.name||'출발')}</div><div class="tail"></div></div>`});ov.setMap(map);overlays.push(ov);}
+function runFit(){const b=new kakao.maps.LatLngBounds();let n=0;if(hasPos(R.start)){b.extend(LL(R.start.lat,R.start.lng));n++;}
+  const list=runResultsFlat();const c=list[rSel]&&list[rSel].c;if(c)c.g.forEach((q,i)=>{if(i%3===0){b.extend(LL(q[0],q[1]));n++;}});
+  if(n>1)map.setBounds(b,60,30,30,30);else if(n===1){map.setCenter(LL(R.start.lat,R.start.lng));map.setLevel(4);}}
+function runPlaced(p){R.res={};R.spots=[];rSel=0;runSave();addrLine($('rAddr'),R.start);renderRun();if(hasPos(p)){map.setCenter(LL(p.lat,p.lng));map.setLevel(4);}}
+async function runFind(){
+  if(busy)return;if(!hasPos(R.start)){if(R.start.name){toast('출발 위치를 찾는 중이에요. 잠시 후 다시 눌러주세요');}else toast('출발 위치를 넣어주세요');return;}
+  busy=true;const btn=$('rFind');btn.disabled=true;const st=t=>{$('rStatus').textContent=t;};
+  try{st('🌳 주변 공원·산책로를 찾는 중…');R.spots=await findSpots(R.start);renderRun();
+    R.res={};
+    for(const D of R.dists){const c=await runCandidates(R.start,D,(n,m)=>st(`🏃 ${D}km 코스 그려보는 중… (${n}/${m})`));R.res[D]=c;rSel=0;renderRun();}
+    runSave();renderRun();runFit();
+    const tot=runResultsFlat().length;st(tot?`코스 ${tot}개를 찾았어요. 카드를 눌러 비교해 보세요.`:'');
+    if(!tot)toast('코스를 못 찾았어요. 출발 위치를 큰길 쪽으로 옮겨 다시 해보세요',4000);
+    else if(innerWidth<860)$('rResults').scrollIntoView({behavior:'smooth'});
+  }catch(e){console.error(e);toast('문제가 생겼어요. 다시 눌러주세요');}
+  finally{busy=false;btn.disabled=false;}}
+function runGpx(x){const c=x.c;const name=`${x.D}km 러닝 코스${VIEW?'':' '+'AB'[x.i]}${R.start.name?' · '+R.start.name:''}`;
+  const e=c.e;const leg={leg:{g:c.g,e}};const tr=legTrack(leg,{lat:c.g[0][0],lng:c.g[0][1]},{});
+  const xml=`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="코스 플래너 (godyoon-bot.github.io/course-planner)" xmlns="http://www.topografix.com/GPX/1/1">
+<metadata><name>${xesc(name)}</name></metadata>
+<wpt lat="${c.g[0][0].toFixed(6)}" lon="${c.g[0][1].toFixed(6)}"><name>${xesc('출발·도착 '+(R.start.name||''))}</name><sym>Flag, Green</sym></wpt>
+<trk><name>${xesc(name)}</name><type>running</type><trkseg>
+${tr.map(q=>`<trkpt lat="${q[0].toFixed(6)}" lon="${q[1].toFixed(6)}">${q[2]!=null?`<ele>${q[2].toFixed(1)}</ele>`:''}</trkpt>`).join('\n')}
+</trkseg></trk>
+</gpx>`;
+  saveGpx(xml,`${x.D}km_러닝${VIEW?'':'_'+'AB'[x.i]}.gpx`);}
+async function runShare(x){const data={k:'run',n:R.start.name||'',s:{lat:+R.start.lat.toFixed(6),lng:+R.start.lng.toFixed(6)},via:x.c.via,D:x.D,p:R.pace};
+  const url=location.origin+location.pathname+'#r='+await pack(data);const title=`🏃 ${x.D}km 러닝 코스${R.start.name?' · '+R.start.name:''}`;
+  if(navigator.share){try{await navigator.share({title,text:title,url});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+  try{await navigator.clipboard.writeText(url);toast('링크를 복사했어요');}catch(e){toast('복사가 막혀 있어요');}}
+function setApp(a){APP=a;document.body.classList.toggle('run',a==='run');[...$('apptabs').children].forEach(b=>b.classList.toggle('on',b.dataset.app===a));
+  try{localStorage.setItem(KEY+':app',a);}catch(e){}
+  if(pick)startPick(pick);rPick=false;$('pickbar').style.display='none';
+  if(a==='run'){renderRunInputs();renderRun();setTimeout(runFit,30);}else{clearMap();renderOut();setTimeout(fitAll,30);}}
+function bindRun(){
+  try{const s=JSON.parse(localStorage.getItem(KEY+':run')||'null');if(s&&s.start)R=Object.assign(R,s);}catch(e){}
+  $('rName').addEventListener('input',e=>{R.start.name=e.target.value;['lat','lng','addr','q','manual','cands','notFound','approx'].forEach(k=>delete R.start[k]);R.res={};runSave();});
+  attachAuto($('rName'),()=>R.start,runPlaced);
+  $('rPace').onchange=e=>{R.pace=+e.target.value;runSave();renderRun();};
+  $('rFind').onclick=runFind;
+  $('rPick').onclick=()=>{rPick=!rPick;$('rPick').classList.toggle('on',rPick);$('pickTxt').textContent='출발 위치를 지도에서 탭하세요';$('pickbar').style.display=rPick?'flex':'none';if(rPick&&innerWidth<860)$('mapbox').scrollIntoView({behavior:'smooth'});};
+  $('rHere').onclick=()=>{if(!navigator.geolocation){toast('이 브라우저는 위치를 못 가져와요');return;}toast('내 위치 찾는 중…');
+    navigator.geolocation.getCurrentPosition(pos=>{const p=R.start;p.lat=+pos.coords.latitude.toFixed(6);p.lng=+pos.coords.longitude.toFixed(6);p.manual=true;
+      geocoder.coord2Address(p.lng,p.lat,(d,st)=>{const a=st===kakao.maps.services.Status.OK&&d[0]?((d[0].road_address&&d[0].road_address.address_name)||d[0].address.address_name):'';p.addr=a;p.name='내 위치'+(a?' ('+a.split(' ').slice(1,3).join(' ')+')':'');$('rName').value=p.name;runPlaced(p);});},
+      ()=>toast('위치 권한이 없어요 · 브라우저 설정에서 허용해주세요',3500),{enableHighAccuracy:true,timeout:10000});};
+  $('apptabs').onclick=e=>{const a=e.target.dataset.app;if(a&&a!==APP)setApp(a);};}
+
 async function boot(){
   let shared=null,editData=null;const h=/^#v=(.+)$/.exec(location.hash),he=/^#e=(.+)$/.exec(location.hash);
   if(h){try{shared=await unpack(h[1]);}catch(e){toast('링크가 손상됐어요');}}
@@ -500,15 +669,28 @@ async function boot(){
   let lay='HYBRID';try{lay=localStorage.getItem(KEY+':layer')||'HYBRID';}catch(e){}
   const setLayer=k=>{map.setMapTypeId(kakao.maps.MapTypeId[k]);[...$('layers').children].forEach(b=>b.classList.toggle('on',b.dataset.l===k));try{localStorage.setItem(KEY+':layer',k);}catch(e){}};
   setLayer(kakao.maps.MapTypeId[lay]?lay:'HYBRID');$('layers').onclick=e=>{const k=e.target.dataset.l;if(k)setLayer(k);};
-  kakao.maps.event.addListener(map,'click',e=>{if(!pick||VIEW)return;const p=byKey(pick);const ll=e.latLng;startPick(pick);
+  kakao.maps.event.addListener(map,'click',e=>{
+    if(rPick&&APP==='run'&&!VIEW){rPick=false;$('rPick').classList.remove('on');$('pickbar').style.display='none';const p=R.start,ll=e.latLng;p.lat=+ll.getLat().toFixed(6);p.lng=+ll.getLng().toFixed(6);p.manual=true;
+      geocoder.coord2Address(p.lng,p.lat,(d,st)=>{const a=st===kakao.maps.services.Status.OK&&d[0]?((d[0].road_address&&d[0].road_address.address_name)||d[0].address.address_name):'';p.addr=a;if(!p.name){p.name=a;$('rName').value=a;}addrLine($('rAddr'),p);runSave();});
+      runPlaced(p);toast('출발 위치를 찍었어요');return;}
+    if(!pick||VIEW)return;const p=byKey(pick);const ll=e.latLng;startPick(pick);
     if(p){p.lat=+ll.getLat().toFixed(6);p.lng=+ll.getLng().toFixed(6);p.manual=true;['addr','notFound','approx','cands'].forEach(k=>delete p[k]);
       geocoder.coord2Address(p.lng,p.lat,(d,st)=>{if(st===kakao.maps.services.Status.OK&&d[0]){p.addr=(d[0].road_address&&d[0].road_address.address_name)||d[0].address.address_name;if(!p.name){p.name=p.addr;renderInputs();}refreshAddrs();save();}});
       placed(p);toast('위치를 찍었어요');}});
   window.addEventListener('resize',()=>map.relayout());
-  $('fit').onclick=fitAll;$('fit2').onclick=fitAll;
+  $('fit').onclick=fitAll;$('fit2').onclick=()=>APP==='run'?runFit():fitAll();
   $('copy').onclick=copySchedule;
   $('gpx').onclick=()=>gpxMenu();
 
+  const hr=/^#r=(.+)$/.exec(location.hash);
+  if(hr){let d=null;try{d=await unpack(hr[1]);}catch(e){toast('링크가 손상됐어요');}
+    if(d&&d.k==='run'){VIEW=true;document.body.classList.add('view');APP='run';document.body.classList.add('run');$('pickbar').remove();
+      R={start:{name:d.n,lat:d.s.lat,lng:d.s.lng},dists:[d.D],pace:d.p||360,spots:[],res:{}};
+      $('rvTitle').textContent=`🏃 ${d.D}km 러닝 코스${d.n?' · '+d.n:''}`;document.title=$('rvTitle').textContent;
+      $('rResults').innerHTML='<div class="empty">코스를 불러오는 중…</div>';
+      const r=await osrmFoot([d.s,...d.via,d.s]);
+      if(r){const c={d:+r.d.toFixed(2),g:r.g,via:d.via,hits:[],ov:0};await elevOne(c);c.up=elevGain(c);R.res[d.D]=[c];}else $('rResults').innerHTML='<div class="empty">길찾기 서버에 연결하지 못했어요. 잠시 후 새로고침해 주세요.</div>';
+      renderRun();runFit();return;}}
   if(shared){VIEW=true;document.body.classList.add('view');fromShare(shared);
     $('vTitle').textContent=T.title||'코스';
     document.title=(T.title||'코스')+' (보기 전용)';$('pickbar').remove();
@@ -526,6 +708,7 @@ async function boot(){
     D.wps=[{id:uid++,purpose:'cafe',name:'',stay:40},{id:uid++,purpose:'meal',name:'',stay:60},{id:uid++,purpose:'store',name:'',stay:10}];}
   normTrip(T);save();
   useDay(T.cur||0);bindEditor();switchDay(T.cur);
+  bindRun();let app0='trip';try{app0=localStorage.getItem(KEY+':app')||'trip';}catch(e){}if(app0==='run')setApp('run');else[...$('apptabs').children].forEach(b=>b.classList.toggle('on',b.dataset.app==='trip'));
 }
 
 /* ---------- days ---------- */
